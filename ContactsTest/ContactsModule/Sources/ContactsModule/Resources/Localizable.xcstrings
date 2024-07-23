@@ -1,0 +1,48 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Add" : {
+
+    },
+    "Contacts Access Denied" : {
+
+    },
+    "Contacts Access Required" : {
+
+    },
+    "Enter name" : {
+
+    },
+    "Failed to fetch saved contacts: %@" : {
+
+    },
+    "No results" : {
+
+    },
+    "No saved contacts" : {
+
+    },
+    "Open Settings" : {
+
+    },
+    "Please grant access to your contacts in Settings." : {
+
+    },
+    "Saved contacts" : {
+
+    },
+    "Search contacts" : {
+
+    },
+    "Settings" : {
+
+    },
+    "Tap the search icon to add contacts" : {
+
+    },
+    "To add new contacts, please allow access in Settings" : {
+
+    }
+  },
+  "version" : "1.0"
+}
