@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import CoreData
 import Combine
 import Models
 
@@ -18,92 +17,58 @@ final class ContactsStorageImpl: ContactsStorage {
     
     private let latestContactsHashKey = "latestContactsHash"
     
-    private let coreDataStorage: CoreDataStorage
-    private let userDefaults: UserDefaults
+    private let storage: Storage
+    private let keyValueStorage: KeyValueStorage
     
-    init(coreDataStorage: CoreDataStorage) {
-        self.coreDataStorage = coreDataStorage
-        self.userDefaults = UserDefaults.standard
-    }
-    
-    private func cleanUpContacts(for contact: Contact, in context: NSManagedObjectContext) throws {
-        let request: NSFetchRequest = ContactEntity.fetchRequest()
-        request.sortDescriptors = Self.sortDescriptors
-        var result = try context.fetch(request)
-        
-        removeDuplicates(for: contact, in: &result, in: context)
-    }
-    
-    private func removeDuplicates(for contact: Contact, in contacts: inout [ContactEntity], in context: NSManagedObjectContext) {
-        contacts.filter { $0.uid == contact.id }.forEach { context.delete($0) }
-        contacts.removeAll { $0.uid == contact.id }
-    }
-    
-    private func fetchRequest(for contact: Contact) -> NSFetchRequest<ContactEntity> {
-        let request: NSFetchRequest = ContactEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "%K = %@", #keyPath(ContactEntity.uid), contact.id)
-        
-        return request
+    init(storage: Storage, keyValueStorage: KeyValueStorage) {
+        self.storage = storage
+        self.keyValueStorage = keyValueStorage
     }
     
     // MARK: ContactsStorage
     func fetchContacts() -> AnyPublisher<[Contact], Error> {
         return Future<[Contact], Error> { [weak self] promise in
-            self?.coreDataStorage.performBackgroundTask { context in
-                do {
-                    let request: NSFetchRequest = ContactEntity.fetchRequest()
-                    request.sortDescriptors = Self.sortDescriptors
-                    
-                    let result = try context.fetch(request).map { $0.toModel() }
-                    promise(.success(result))
-                } catch {
-                    promise(.failure(StorageError.readError(error)))
+            let requst = FetchRequest<Contact>(sortDescriptors: Self.sortDescriptors)
+            
+            self?.storage.execute(requst, completion: { (result: Result<[Contact], Error>) in
+                switch result {
+                case .success(let contacts): promise(.success(contacts))
+                case .failure(let error): promise(.failure(error))
                 }
-            }
+            })
         }.eraseToAnyPublisher()
     }
     
     func save(contacts: [Contact]) -> AnyPublisher<[Contact], Error> {
         return Future<[Contact], Error> { [weak self] promise in
-            self?.coreDataStorage.performBackgroundTask { context in
-                do {
-                    try contacts.forEach { contact in try self?.cleanUpContacts(for: contact, in: context) }
-                    let contactEntities = contacts.map { ContactEntity(contact: $0, insertInto: context) }
-                    try context.save()
-                    
-                    promise(.success(contactEntities.map { $0.toModel() }))
-                } catch {
-                    promise(.failure(StorageError.saveError(error)))
+            self?.storage.insert(contacts, completion: { result in
+                switch result {
+                case .success(_): promise(.success(contacts))
+                case .failure(let error): promise(.failure(error))
                 }
-            }
+            })
+            
         }
         .eraseToAnyPublisher()
     }
     
     func delete(contact: Contact) -> AnyPublisher<Contact, Error> {
-        let request = fetchRequest(for: contact)
-        
         return Future<Contact, Error> { [weak self] promise in
-            self?.coreDataStorage.performBackgroundTask { context in
-                do {
-                    if let result = try context.fetch(request).first {
-                        context.delete(result)
-                        try context.save()
-                        promise(.success(contact))
-                    }
-                } catch {
-                    promise(.failure(StorageError.deleteError(error)))
+            self?.storage.delete([contact], completion: { result in
+                switch result {
+                case .success(): promise(.success(contact))
+                case .failure(let error): promise(.failure(error))
                 }
-            }
+            })
         }
         .eraseToAnyPublisher()
     }
     
     var latestContactsHash: Int? {
-        return userDefaults.integer(forKey: latestContactsHashKey)
+        return keyValueStorage.getInt(for: latestContactsHashKey)
     }
     
     func setLatestContactsHash(_ hash: Int) {
-        userDefaults.setValue(hash, forKey: latestContactsHashKey)
+        keyValueStorage.save(int: hash, for: latestContactsHashKey)
     }
 }

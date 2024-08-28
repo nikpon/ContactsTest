@@ -1,6 +1,3 @@
-// The Swift Programming Language
-// https://docs.swift.org/swift-book
-
 import Contacts
 import os
 import UIKit
